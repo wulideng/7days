@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>七日園丁 - 最終穩定版</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        :root {
+            --bg-deep: #1a252f; --bg-main: #2c3e50; --text-main: #ecf0f1;
+            --text-muted: #bdc3c7; --accent-blue: #3498db; --accent-green: #2ecc71;
+            --accent-purple: #9b59b6; --accent-red: #e74c3c; --accent-orange: #f39c12;
+            --border-color: #ecf0f1; --card-bg: #34495e; --slot-bg: rgba(0,0,0,0.2);
+            --slot-hover-bg: rgba(46, 204, 113, 0.2); --slot-used-bg: rgba(0,0,0,0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; width: 100%; overflow: hidden; }
+        body { 
+            font-family: 'Press Start 2P', 'Microsoft JhengHei', sans-serif; 
+            background: var(--bg-main); color: var(--text-main); image-rendering: pixelated; 
+        }
+
+        .game-container { 
+            width: 100%; max-height: 100vh; display: flex; flex-direction: column; 
+            overflow-y: auto; padding-bottom: 20px;
+        }
+        .screen { width: 100%; display: flex; flex-direction: column; }
+        .start-screen, .end-screen { 
+            text-align: center; padding: 40px; background: var(--bg-deep); 
+            justify-content: center; align-items: center; min-height: 100vh;
+        }
+        .hidden { display: none !important; }
+
+        .game-title { font-size: clamp(1.5em, 4vw, 2.5em); margin-bottom: 20px; line-height: 1.4; }
+        .game-subtitle { font-size: clamp(0.8em, 2vw, 1em); color: var(--text-muted); margin-bottom: 30px; }
+        .start-button, .restart-button {
+            border: 2px solid var(--border-color); padding: 10px 25px; font-size: clamp(0.8em, 1.5vw, 1em);
+            cursor: pointer; transition: all 0.2s; font-weight: bold; color: var(--text-main); background: transparent;
+        }
+        .start-button { border-color: var(--accent-green); color: var(--accent-green); }
+        .start-button:hover { background: var(--accent-green); color: var(--bg-deep); }
+        .restart-button:hover { background: var(--accent-blue); }
+        
+        .gameplay-screen { padding: 10px; gap: 10px; min-height: 100vh; }
+        
+        .world-board {
+            flex-shrink: 0; padding: 10px; background: var(--bg-deep); border: 2px solid var(--border-color);
+            display: flex; justify-content: space-around; align-items: center; gap: 15px;
+        }
+        .garden-display { text-align: center; }
+        .pixel-art-garden { 
+            font-family: 'Courier New', monospace; font-size: clamp(10px, 1.2vw, 14px); 
+            line-height: 1.2; white-space: pre; transition: opacity 0.5s;
+        }
+        .character-display { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; min-width: 120px;}
+        .character-slot { text-align: center; position: relative; }
+        .character-avatar-text { 
+            font-size: clamp(0.7em, 1.2vw, 0.9em); padding: 8px 12px; 
+            border: 2px solid #7f8c8d; color: #7f8c8d; transition: all 0.3s;
+        }
+        .character-slot.met .character-avatar-text { 
+            color: var(--text-main); border-color: var(--accent-green); 
+            background: rgba(46, 204, 113, 0.1); 
+        }
+
+        .main-workspace { flex-grow: 1; display: flex; flex-direction: column; gap: 10px; }
+        
+        .info-panel {
+            flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 15px; background: var(--bg-deep); border: 2px solid var(--border-color);
+        }
+        .day-counter { font-size: clamp(0.9em, 1.5vw, 1em); }
+        .stats-dashboard { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;}
+        .stat-item { text-align: right; width: clamp(70px, 10vw, 80px); }
+        .stat-label { font-size: clamp(0.5em, 1vw, 0.6em); color: var(--text-muted); margin-bottom: 3px; display: block; }
+        .stat-bar { width: 100%; height: 5px; background: rgba(0,0,0, 0.3); border: 1px solid var(--text-muted); }
+        .stat-fill { height: 100%; transition: width 0.5s ease; }
+        .stat-garden { background: var(--accent-green); } 
+        .stat-energy { background: var(--accent-orange); } 
+        .stat-favor { background: var(--accent-red); } 
+        .stat-patience { background: var(--accent-blue); }
+
+        .event-panel {
+            flex-shrink: 0; background: var(--bg-deep); border: 2px solid var(--border-color);
+            padding: 15px; text-align: center; max-height: 200px; overflow-y: auto; display: flex;
+            flex-direction: column; justify-content: center; transition: opacity 0.3s;
+        }
+        .event-text { font-size: clamp(0.8em, 1.5vw, 0.9em); line-height: 1.6; margin-bottom: 10px; }
+        .event-character { color: var(--accent-purple); font-size: clamp(0.7em, 1.2vw, 0.8em); }
+        .event-choices { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        .event-choice-btn {
+            padding: 8px 15px; background: var(--card-bg); color: var(--text-main);
+            border: 2px solid var(--accent-blue); cursor: pointer; font-size: clamp(0.7em, 1.2vw, 0.8em);
+            transition: all 0.2s; border-radius: 4px;
+        }
+        .event-choice-btn:hover { background: var(--accent-blue); }
+        
+        .verb-slots {
+            flex-grow: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+            padding: 15px; background: var(--bg-deep); border: 2px solid var(--border-color);
+            min-height: 80px; position: relative;
+        }
+        .verb-slot {
+            background: var(--slot-bg); border: 2px dashed var(--text-muted);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: all 0.3s; min-height: 80px; flex: 1; position: relative;
+        }
+        .verb-slot.current { 
+            border-color: var(--accent-blue); background: rgba(52, 152, 219, 0.1); 
+        }
+        .verb-slot.drop-target {
+            border-color: var(--accent-green);
+            background: var(--slot-hover-bg);
+            transform: scale(1.05);
+        }
+        .verb-slot.used { 
+            background: var(--slot-used-bg); border-style: solid; opacity: 0.8;
+            border-color: var(--accent-green);
+        }
+        .verb-slot-time { font-size: clamp(0.8em, 1.5vw, 0.9em); color: var(--text-muted); margin-bottom: 8px; }
+        .verb-slot-action { font-size: clamp(0.6em, 1vw, 0.7em); color: var(--accent-green); text-align: center; }
+
+        .hand-area {
+            flex-shrink: 0; display: flex; justify-content: center; align-items: center; gap: 8px;
+            padding: 15px; background: var(--bg-deep); border: 2px solid var(--border-color); 
+            min-height: 110px; flex-wrap: wrap; overflow-x: hidden; position: relative;
+        }
+        .card {
+            width: clamp(60px, 10vw, 70px); height: clamp(90px, 15vw, 100px); 
+            background: var(--card-bg); border: 2px solid var(--border-color);
+            display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+            padding: 6px; cursor: grab; transition: transform 0.2s, opacity 0.3s;
+            position: relative; touch-action: none; user-select: none;
+        }
+        .card.dragging { 
+            cursor: grabbing; 
+            transform: scale(1.1); 
+            opacity: 0.9; 
+            z-index: 1000;
+            pointer-events: none;
+            position: fixed;
+        }
+        .card-art { font-size: clamp(1.5em, 3vw, 1.8em); pointer-events: none; }
+        .card-name { font-size: clamp(0.5em, 0.8vw, 0.6em); pointer-events: none; text-align: center; }
+        .card-durability { 
+            position: absolute; bottom: 2px; left: 4px; font-size: clamp(0.4em, 0.7vw, 0.5em); 
+            color: var(--accent-orange); 
+        }
+        
+        .card.item { border-color: var(--accent-orange); }
+        .card.action { border-color: var(--accent-green); }
+
+        .day-transition {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; font-size: clamp(1em, 2vw, 1.2em);
+            opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 100;
+            padding: 20px; text-align: left;
+        }
+        .day-transition.show { opacity: 1; }
+        .day-transition-title { font-size: clamp(1.5em, 3vw, 1.8em); margin-bottom: 20px; text-align: center; }
+        .day-transition-diary { white-space: pre-wrap; line-height: 1.8; max-width: 600px; }
+
+        .ending-text { white-space: pre-wrap; margin: 20px 0; line-height: 1.8; }
+
+        @media (max-width: 768px) {
+            .verb-slots { grid-template-columns: repeat(2, 1fr); }
+            .hand-area { justify-content: flex-start; }
+        }
+        @media (max-width: 480px) {
+            .world-board { flex-direction: column; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="startScreen" class="screen start-screen">
+            <h1 class="game-title">七日園丁</h1>
+            <p class="game-subtitle">兩天卡牌原型</p>
+            <button class="start-button" id="startBtn">開始遊戲</button>
+        </div>
+        
+        <div id="gameplayScreen" class="screen gameplay-screen hidden">
+            <div class="world-board">
+                <div class="character-display">
+                    <div id="char-guard" class="character-slot"><div class="character-avatar-text">???</div></div>
+                </div>
+                <div class="garden-display"><pre id="pixelArtGarden" class="pixel-art-garden"></pre></div>
+                <div class="character-display">
+                    <div id="char-maid" class="character-slot hidden"><div class="character-avatar-text">???</div></div>
+                    <div id="char-king" class="character-slot hidden"><div class="character-avatar-text">???</div></div>
+                </div>
+            </div>
+
+            <div class="main-workspace">
+                <div class="info-panel">
+                    <div id="dayCounter" class="day-counter"></div>
+                    <div class="stats-dashboard">
+                        <div class="stat-item"><span class="stat-label">花園</span><div class="stat-bar"><div id="statGarden" class="stat-fill stat-garden"></div></div></div>
+                        <div class="stat-item"><span class="stat-label">體力</span><div class="stat-bar"><div id="statEnergy" class="stat-fill stat-energy"></div></div></div>
+                        <div class="stat-item"><span class="stat-label">好感</span><div class="stat-bar"><div id="statFavor" class="stat-fill stat-favor"></div></div></div>
+                        <div class="stat-item"><span class="stat-label">耐心</span><div class="stat-bar"><div id="statPatience" class="stat-fill stat-patience"></div></div></div>
+                    </div>
+                </div>
+                <div id="eventPanel" class="event-panel">
+                    <div id="eventText" class="event-text"></div>
+                    <div id="eventCharacter" class="event-character"></div>
+                    <div id="eventChoices" class="event-choices"></div>
+                </div>
+                <div id="verbSlots" class="verb-slots"></div>
+            </div>
+            <div id="handArea" class="hand-area"></div>
+        </div>
+
+        <div id="endScreen" class="screen end-screen hidden">
+            <h2 id="endingTitle" class="ending-title"></h2>
+            <div id="endingText" class="ending-text"></div>
+            <button class="restart-button" id="restartBtn">重新開始</button>
+        </div>
+        
+        <div id="dayTransition" class="day-transition">
+            <div id="dayTransitionTitle" class="day-transition-title"></div>
+            <div id="dayTransitionDiary" class="day-transition-diary"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL STATE VARIABLES ---
+        let playerStats, gameState, characters, dragState;
+        
+        const TIME_PERIODS = ['上午', '中午', '下午', '傍晚'];
+        
+        const characterData = {
+            guard: { name: '守衛', met: false },
+            maid: { name: '侍女', met: false },
+            king: { name: '國王', met: false }
+        };
+
+        // --- DRAG STATE ---
+        dragState = {
+            isDragging: false,
+            currentCard: null,
+            originalPosition: null,
+            dragElement: null
+        };
+
+        // --- DATA DATABASES ---
+        const cardDatabase = {
+            'HOE': { name: '鋤頭', art: '⚒️', type: 'item', durability: 3, effects: { garden: 10, energy: -5 }, playDescription: '你揮動鋤頭，清理出一片雜草，花園看起來整潔了些。', combo: { 'SEED_BAG': { garden: 15, description: '配合種子，土地煥發出生機！' } } },
+            'SEED_BAG': { name: '種子袋', art: '🌱', type: 'item', effects: { garden: 15 }, playDescription: '你撒下種子，期待新芽破土而出。' },
+            'WATER': { name: '清水', art: '💧', type: 'item', effects: { garden: 5, energy: 5 }, playDescription: '你用清水澆灌，植物開始煥發活力。', combo: { 'PRUNING_SHEARS': { garden: 15, description: '修剪後澆水，花園更加整齊！' } } },
+            'PRUNING_SHEARS': { name: '修枝剪', art: '✂️', type: 'item', durability: 2, effects: { garden: 15, patience: -5 }, playDescription: '你小心修剪，植物更整齊，但國王似乎不耐煩了。' },
+            'HERBAL_TEA': { name: '草藥茶', art: '☕', type: 'item', effects: { energy: 15, favor: 5 }, playDescription: '你喝下草藥茶，感到精神煥發，侍女微笑點頭。' },
+            'REST': { name: '休息', art: '😴', type: 'action', effects: { energy: 25 }, playDescription: '你小憩片刻，感覺體力恢復了。' },
+            'EXPLORE': { name: '探索', art: '🔍', type: 'action', effects: { energy: -10, triggerEvent: 'FOUND_WATER' }, playDescription: '你四處探索，尋找有用的資源。' },
+            'FLOWER_SEEDS': { name: '花種', art: '🌸', type: 'item', charges: 2, effects: { garden: 10, favor: 5 }, playDescription: '你種下花種，花園增添了幾分色彩。' },
+            'OLD_COINS': { name: '舊銅幣', art: '💰', type: 'item', durability: 1, effects: { favor: 10 }, playDescription: '你將幾枚舊銅幣塞給守衛，他不動聲色地收下了。' },
+            'GARDEN_MAP': { name: '花園地圖', art: '🗺️', type: 'item', durability: 1, effects: { triggerEvent: 'HIDDEN_PATH' }, playDescription: '你展開地圖，發現了一條隱秘小徑。', unique: true },
+        };
+
+        const eventDatabase = {
+            'DAY_1_START': { text: '你被守衛粗暴地推入花園。"七天，讓這裡開花，不然你的腦袋就得開花。" 他打給你一把舊鋤頭和一袋種子，"別偷懶。"', character: '守衛', unlockCharacter: 'guard' },
+            'DAY_2_START': { text: '第二天清晨，國王突然前來巡查，他皺眉道："還遠遠不夠！" 守衛不耐煩地打給你一把修枝剪，"用這個，讓花園像樣點！"', character: '國王 / 守衛', condition: { day: 2 }, effect: { patience: -5 }, unlockCharacter: 'king' },
+            'GUARD_WATCHING': { text: '守衛在遠處監視著你的一舉一動，他似乎對你的進展並不滿意。', character: '守衛', condition: { day: 1, period: 1 }, effect: { patience: 5 } },
+            'FOUND_WATER': { text: '在花園角落，你發現了一個破舊但還能用的水井。', choices: [
+                { text: '仔細查看井底（-5體力）', effect: { addCards: ['WATER', 'GARDEN_MAP'], energy: -5 } }, 
+                { text: '在井口縫隙摸索', effect: { addCards: ['OLD_COINS'], energy: -2 } },
+                { text: '直接打水離開', effect: { addCards: ['WATER'] } }
+            ]},
+            'HIDDEN_PATH': { text: '你根據地圖找到一條隱秘小徑，路邊散落著一些花種！', effect: { addCards: ['FLOWER_SEEDS'], garden: 5 } },
+            'DAY_2_MAID_INTRO': { text: '一位侍女悄悄靠近，遞給你一杯草藥茶："國王脾氣不好，你多保重。喝了這個，幹活更有勁！"', character: '侍女', condition: { day: 2, period: 1 }, effect: { addCards: ['HERBAL_TEA'], favor: 10 }, unlockCharacter: 'maid' },
+            'KINGS_INSPECTION': { text: '國王再次出現，檢查你的工作："這花園必須更漂亮！"', character: '國王', condition: { day: 2, period: 2 }, effect: { patience: () => playerStats.garden < 40 ? -10 : 0 } },
+        };
+
+        const gardenVisuals = {
+            weedy: `🌿w🌿w🌿\nw~w~w~w\n🌿w🌿w🌿\n~w~w~w~`,
+            cleared: `...~...\n~.....~\n.......~\n...~....`,
+            budding: `🌱..🌿.\n...~...\n.🌿.🌱..\n...~....`,
+            blooming: `🌸🌱🌿.\n..🌸..~\n.🌿.🌸🌱.\n...~....`
+        };
+
+        // --- CORE GAME LOGIC ---
+        // 這是修正後的正確版本
+function startGame() {
+    playerStats = { garden: 10, energy: 80, favor: 20, patience: 70 };
+    gameState = { 
+        day: 1, periodIndex: 0, hand: [], 
+        eventQueue: ['DAY_1_START'], flags: {}, currentEvent: null,
+        slotCards: {}, // <--- 在這裡加上逗號
+        dayLog: { actionCounts: {} } // 用於計算卡牌使用次數
+    };
+    characters = JSON.parse(JSON.stringify(characterData));
+    showScreen('gameplayScreen');
+    setTimeout(initializeDay, 300);
+}
+
+        function initializeDay() {
+            gameState.dayLog = { actionCounts: {} }; // 每天重置日誌
+            gameState.hand = gameState.hand.filter(card => (card.durability && card.durability > 0) || (card.charges && card.charges > 0));
+            const dayStartingCards = { 1: ['HOE', 'SEED_BAG', 'REST', 'EXPLORE'], 2: ['PRUNING_SHEARS', 'WATER', 'REST', 'EXPLORE'] };
+            (dayStartingCards[gameState.day] || []).forEach(addCardToHand);
+            updateAllUI();
+            renderHandAndSlots();
+            processNextEvent();
+        }
+        
+        function startNextDay() {
+            gameState.day++;
+            gameState.periodIndex = 0;
+            gameState.slotCards = {};
+            gameState.eventQueue = [`DAY_${gameState.day}_START`];
+            Object.keys(gameState.flags).forEach(key => { if (!key.startsWith('unique_')) delete gameState.flags[key]; });
+            initializeDay();
+        }
+
+        function endDay() {
+            const transition = document.getElementById('dayTransition');
+            const diaryText = generateDiaryEntry();
+            document.getElementById('dayTransitionTitle').textContent = `第${gameState.day}天日記`;
+            document.getElementById('dayTransitionDiary').textContent = diaryText;
+            transition.classList.add('show');
+            
+            setTimeout(() => {
+                transition.classList.remove('show');
+                if (gameState.day < 2) {
+                    startNextDay();
+                } else {
+                    document.getElementById('endingTitle').textContent = '兩天的勞作結束';
+                    document.getElementById('endingText').textContent = diaryText;
+                    showScreen('endScreen');
+                }
+            }, 4500);
+        }
+
+        // --- EVENT HANDLING ---
+// 這是 processNextEvent 函數的完整正確版本
+function processNextEvent() {
+    if (gameState.currentEvent) return;
+    if (gameState.eventQueue.length === 0) checkTimeBasedEvents();
+    
+    if (gameState.eventQueue.length > 0) {
+        const eventId = gameState.eventQueue.shift();
+        const event = eventDatabase[eventId];
+        if (event) {
+            gameState.currentEvent = event;
+            displayEvent(event);
+        }
+    } else {
+        if (gameState.periodIndex >= TIME_PERIODS.length) {
+            endDay();
+        } else {
+            document.getElementById('eventText').textContent = '你接下來要做什麼？';
+            document.getElementById('eventCharacter').textContent = '';
+            document.getElementById('eventChoices').innerHTML = '';
+            setTimeout(setupDragAndDrop, 100);
+        }
+    }
+}
+
+        function checkTimeBasedEvents() {
+            Object.entries(eventDatabase).forEach(([id, event]) => {
+                if (event.condition?.day === gameState.day && event.condition.period === gameState.periodIndex && !gameState.flags[id]) {
+                    gameState.eventQueue.push(id);
+                    gameState.flags[id] = true;
+                }
+            });
+        }
+                
+        function checkCardTriggeredEvents(card) {
+    const eventId = card.effects?.triggerEvent;
+    if (!eventId) return;
+    
+    const uniqueEventFlag = `unique_event_${eventId}_triggered`;
+
+    // 檢查永久標記，確保事件只發生一次
+    if (!gameState.flags[uniqueEventFlag]) {
+        gameState.eventQueue.push(eventId);
+        gameState.flags[uniqueEventFlag] = true;
+
+        // --- 新增的代碼 ---
+        // 在當日日誌中記錄下這個事件的發生
+        if (!gameState.dayLog.eventsTriggered) {
+            gameState.dayLog.eventsTriggered = {};
+        }
+        gameState.dayLog.eventsTriggered[eventId] = true;
+        // --- 新增代碼結束 ---
+    }
+}
+
+        function handleEventChoice(choice) {
+    applyEffect(choice.effect);
+    gameState.currentEvent = null;
+    document.getElementById('eventText').textContent = '你接下來要做什麼？';
+    document.getElementById('eventCharacter').textContent = '';
+    document.getElementById('eventChoices').innerHTML = '';
+    updateAllUI();
+    renderHand();
+    setTimeout(() => processNextEvent(), 300);
+}
+        
+        function handleCardPlay(card) {
+    // --- 新增日誌記錄功能開始 ---
+    // 這段代碼會記錄玩家使用了什麼卡牌，以便日記生成
+    const cardType = card.id.split('_')[0]; // 從 'HOE_12345' 中獲取 'HOE'
+    const log = gameState.dayLog.actionCounts;
+    log[cardType] = (log[cardType] || 0) + 1;
+    // --- 新增日誌記錄功能結束 ---
+
+    let description = card.playDescription;
+    const prevCardType = gameState.slotCards[gameState.periodIndex - 1]?.id.split('_')[0];
+    if (prevCardType && card.combo?.[prevCardType]) {
+        applyEffect(card.combo[prevCardType]);
+        description = card.combo[prevCardType].description || description;
+    }
+    applyEffect(card.effects);
+
+    const cardIndex = gameState.hand.findIndex(c => c.id === card.id);
+    if (cardIndex > -1) {
+        const cardInHand = gameState.hand[cardIndex];
+        let isConsumed = false;
+        if (typeof cardInHand.durability !== 'undefined') {
+            cardInHand.durability--;
+            if (cardInHand.durability <= 0) isConsumed = true;
+        } else if (typeof cardInHand.charges !== 'undefined') {
+            cardInHand.charges--;
+            if (cardInHand.charges <= 0) isConsumed = true;
+        } else {
+            isConsumed = true; 
+        }
+        if (isConsumed) gameState.hand.splice(cardIndex, 1);
+    }
+
+    // 立即更新UI，讓卡牌從手牌區消失
+    updateAllUI();
+    renderHandAndSlots();
+
+    gameState.slotCards[gameState.periodIndex] = card;
+    gameState.periodIndex++;
+    
+    document.getElementById('eventText').textContent = description;
+    document.getElementById('eventCharacter').textContent = '';
+    
+    checkCardTriggeredEvents(card);
+    
+    // 現在 setTimeout 只負責處理後續的遊戲流程
+    setTimeout(() => {
+    // 不再進行判斷，總是調用 processNextEvent 讓它去決定下一步做什麼
+    processNextEvent();
+}, 1500);
+}
+
+        // --- DRAG AND DROP SYSTEM ---
+        function setupDragAndDrop() {
+            if (gameState.currentEvent || gameState.periodIndex >= TIME_PERIODS.length) return;
+            
+            const cards = document.querySelectorAll('.hand-area .card');
+            cards.forEach(card => {
+                card.addEventListener('mousedown', startDrag);
+                card.addEventListener('touchstart', startDrag, { passive: false });
+            });
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            if (gameState.currentEvent || gameState.periodIndex >= TIME_PERIODS.length) return;
+            
+            const card = e.currentTarget;
+            const cardId = card.id;
+            const cardData = gameState.hand.find(c => c.id === cardId);
+            if (!cardData) return;
+
+            dragState.isDragging = true;
+            dragState.currentCard = cardData;
+            dragState.dragElement = card;
+            
+            // 記錄原始位置
+            const rect = card.getBoundingClientRect();
+            dragState.originalPosition = { x: rect.left, y: rect.top };
+            
+            // 設置拖拽狀態
+            card.classList.add('dragging');
+            document.body.style.cursor = 'grabbing';
+            
+            // 添加全局事件監聽
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            document.addEventListener('touchend', endDrag);
+            
+            // 初始位置设置
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            updateCardPosition(clientX, clientY);
+        }
+
+        function onDrag(e) {
+            if (!dragState.isDragging) return;
+            e.preventDefault();
+            
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            updateCardPosition(clientX, clientY);
+            updateDropTargets(clientX, clientY);
+        }
+
+        function updateCardPosition(x, y) {
+            if (!dragState.dragElement) return;
+            
+            const card = dragState.dragElement;
+            const cardRect = card.getBoundingClientRect();
+            const offsetX = cardRect.width / 2;
+            const offsetY = cardRect.height / 2;
+            
+            card.style.left = (x - offsetX) + 'px';
+            card.style.top = (y - offsetY) + 'px';
+        }
+
+        function updateDropTargets(x, y) {
+            const slots = document.querySelectorAll('.verb-slot');
+            let targetSlot = null;
+            
+            slots.forEach(slot => {
+                slot.classList.remove('drop-target');
+                
+                const rect = slot.getBoundingClientRect();
+                const isInside = x >= rect.left && x <= rect.right && 
+                                y >= rect.top && y <= rect.bottom;
+                
+                if (isInside) {
+                    const slotIndex = parseInt(slot.id.split('-')[1]);
+                    const isCurrent = slotIndex === gameState.periodIndex;
+                    const isUsed = slot.classList.contains('used');
+                    
+                    if (isCurrent && !isUsed) {
+                        slot.classList.add('drop-target');
+                        targetSlot = slot;
+                    }
+                }
+            });
+            
+            return targetSlot;
+        }
+
+        function endDrag(e) {
+            if (!dragState.isDragging) return;
+            
+            const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
+            const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
+            
+            const targetSlot = updateDropTargets(clientX, clientY);
+            
+            // 清理事件监听
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', endDrag);
+            document.removeEventListener('touchmove', onDrag);
+            document.removeEventListener('touchend', endDrag);
+            document.body.style.cursor = '';
+            
+            // 清理所有drop-target样式
+            document.querySelectorAll('.verb-slot').forEach(slot => {
+                slot.classList.remove('drop-target');
+            });
+            
+            if (targetSlot) {
+                // 成功放置 - 执行吸附动画
+                snapToSlot(dragState.dragElement, targetSlot, () => {
+                    handleCardPlay(dragState.currentCard);
+                    resetDragState();
+                });
+            } else {
+                // 放置失败 - 执行回弹动画
+                bounceBack(dragState.dragElement, () => {
+                    resetDragState();
+                });
+            }
+        }
+
+        function snapToSlot(cardElement, slot, callback) {
+            const slotRect = slot.getBoundingClientRect();
+            const targetX = slotRect.left + slotRect.width / 2;
+            const targetY = slotRect.top + slotRect.height / 2;
+            
+            // 吸附动画
+            cardElement.style.transition = 'all 0.2s ease-out';
+            cardElement.style.left = (targetX - cardElement.offsetWidth / 2) + 'px';
+            cardElement.style.top = (targetY - cardElement.offsetHeight / 2) + 'px';
+            cardElement.style.transform = 'scale(1.1)';
+            
+            setTimeout(() => {
+                cardElement.style.transform = 'scale(1.0)';
+                setTimeout(() => {
+                    // 隐藏卡牌并更新slot显示
+                    cardElement.style.opacity = '0';
+                    const slotIndex = parseInt(slot.id.split('-')[1]);
+                    slot.innerHTML = `<span class="verb-slot-time">${TIME_PERIODS[slotIndex]}</span><span class="verb-slot-action">${dragState.currentCard.name}</span>`;
+                    slot.classList.add('used');
+                    
+                    setTimeout(callback, 100);
+                }, 100);
+            }, 200);
+        }
+
+        function bounceBack(cardElement, callback) {
+            // 回弹动画
+            cardElement.style.transition = 'all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+            cardElement.style.left = dragState.originalPosition.x + 'px';
+            cardElement.style.top = dragState.originalPosition.y + 'px';
+            cardElement.style.transform = 'scale(1.0)';
+            
+            setTimeout(() => {
+                callback();
+            }, 300);
+        }
+
+        function resetDragState() {
+            if (dragState.dragElement) {
+                dragState.dragElement.classList.remove('dragging');
+                dragState.dragElement.style.transition = '';
+                dragState.dragElement.style.left = '';
+                dragState.dragElement.style.top = '';
+                dragState.dragElement.style.transform = '';
+                dragState.dragElement.style.opacity = '';
+            }
+            
+            dragState.isDragging = false;
+            dragState.currentCard = null;
+            dragState.originalPosition = null;
+            dragState.dragElement = null;
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        function applyEffect(effect) {
+             if (!effect) return;
+             for (const [stat, value] of Object.entries(effect)) {
+                if (stat === 'addCards') value.forEach(addCardToHand);
+                else if (stat === 'unlockCharacter') {
+                    characters[value].met = true;
+                    updateCharacterVisibility();
+                } else if (playerStats.hasOwnProperty(stat)) {
+                    playerStats[stat] = Math.max(0, Math.min(100, playerStats[stat] + (typeof value === 'function' ? value() : value)));
+                }
+            }
+        }
+        
+        function addCardToHand(cardType) {
+            const cardData = cardDatabase[cardType];
+            if (!cardData) return;
+            if (cardData.unique && gameState.flags[`unique_${cardType}_found`]) return;
+            if (cardData.unique) gameState.flags[`unique_${cardType}_found`] = true;
+            if (gameState.hand.length >= 6) gameState.hand.shift();
+            
+            const newCard = JSON.parse(JSON.stringify(cardData));
+            newCard.id = `${cardType}_${Date.now()}`;
+            gameState.hand.push(newCard);
+        }
+        
+        // 全新的日記生成函數
+// 這是 generateDiaryEntry 函數的完整正確版本
+function generateDiaryEntry() {
+    let diary = `【第 ${gameState.day} 天日記】\n\n`;
+    const log = gameState.dayLog.actionCounts;
+    let hasSpecificContent = false; // 用於判斷是否生成了特殊日記
+
+    // --- 規則 1：根據高頻率動作生成日記 ---
+    if (log.HOE && log.HOE >= 2) { // <-- 已將條件從 3 改為 2
+        diary += "今天不停地揮舞鋤頭進行開墾，雙手都感覺快要磨破了，真是辛苦的一天。\n\n";
+        hasSpecificContent = true;
+    } else if (log.SEED_BAG && log.SEED_BAG >= 2) {
+        diary += "今天播下了很多種子，看著空蕩蕩的土地被填滿，心中也多了一絲期待。\n\n";
+        hasSpecificContent = true;
+    } else if (log.REST && log.REST >= 2) {
+        diary += "感覺特別疲憊，今天大部分時間都在休息。必須得養足精神才能應付明天的工作。\n\n";
+        hasSpecificContent = true;
+    }
+
+    // --- 規則 2：根據觸發的特殊事件生成日記 ---
+    // 檢查今天是否觸發了找到水井的事件
+    if (gameState.dayLog.eventsTriggered?.FOUND_WATER) {
+        diary += "今天在花園的角落有了意外的發現——一口舊井！這給了我新的希望，也許明天還能找到些有用的東西。\n\n";
+        hasSpecificContent = true;
+    }
+    // 檢查今天是否觸發了找到秘密小徑的事件
+    if (gameState.dayLog.eventsTriggered?.HIDDEN_PATH) {
+        diary += "地圖上的標記竟然是真的！我找到了一條隱秘的小徑，還發現了一些被人遺忘的花種。\n\n";
+        hasSpecificContent = true;
+    }
+
+    // --- 規則 3：如果沒有特殊日記，則根據綜合表現生成通用日記 ---
+    if (!hasSpecificContent) {
+        const totalWorkActions = (log.HOE || 0) + (log.SEED_BAG || 0) + (log.WATER || 0) + (log.PRUNING_SHEARS || 0);
+        if (totalWorkActions >= 3) {
+            diary += "今天埋頭苦幹，雖然疲憊，但看到花園的變化，覺得一切都值得。\n\n";
+        } else if (totalWorkActions > 0) {
+            diary += "今天按部就班地做了一些園藝工作，不好不壞，平淡的一天。\n\n";
+        } else {
+            diary += "今天幾乎沒有怎麼打理花園，時間就這樣流逝了。明天必須得加把勁了。\n\n";
+        }
+    }
+
+    // --- 規則 4：最後根據玩家狀態添加一句結語 ---
+    if (playerStats.energy < 20) {
+        diary += "我現在筋疲力盡，感覺眼皮都快睜不開了。";
+    } else if (playerStats.patience < 40) {
+        diary += "國王的耐心似乎所剩無幾，我能清楚地感受到守衛那冰冷的視線。";
+    } else if (characters.maid.met && playerStats.favor > 30) {
+        diary += "那位侍女的善意是這冰冷地方裡唯一的溫暖。";
+    } else {
+        diary += "明天又會是怎樣的一天呢？";
+    }
+
+    return diary;
+}
+
+        // --- UI RENDERING ---
+        function showScreen(screenId) {
+            ['startScreen', 'gameplayScreen', 'endScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function updateCharacterVisibility() {
+            Object.keys(characters).forEach(key => {
+                const charEl = document.getElementById(`char-${key}`);
+                if (charEl) {
+                    charEl.classList.toggle('hidden', !characters[key].met);
+                    if (characters[key].met) {
+                        charEl.querySelector('.character-avatar-text').textContent = characters[key].name;
+                        charEl.classList.add('met');
+                    }
+                }
+            });
+        }
+
+        function updateAllUI() {
+            document.getElementById('dayCounter').textContent = `第${gameState.day}天`;
+            ['Garden', 'Energy', 'Favor', 'Patience'].forEach(stat => {
+                document.getElementById(`stat${stat}`).style.width = playerStats[stat.toLowerCase()] + '%';
+            });
+            updateGardenVisual();
+            updateCharacterVisibility();
+        }
+
+        function updateGardenVisual() {
+            const gardenEl = document.getElementById('pixelArtGarden');
+            if (playerStats.garden >= 80) gardenEl.textContent = gardenVisuals.blooming;
+            else if (playerStats.garden >= 40) gardenEl.textContent = gardenVisuals.budding;
+            else if (playerStats.garden >= 20) gardenEl.textContent = gardenVisuals.cleared;
+            else gardenEl.textContent = gardenVisuals.weedy;
+        }
+
+        function displayEvent(event) {
+            document.getElementById('eventText').textContent = event.text;
+            document.getElementById('eventCharacter').textContent = event.character || '';
+            const choicesContainer = document.getElementById('eventChoices');
+            choicesContainer.innerHTML = '';
+            
+            if (event.choices) {
+                event.choices.forEach(choice => {
+                    const btn = document.createElement('button');
+                    btn.className = 'event-choice-btn';
+                    btn.textContent = choice.text;
+                    btn.onclick = () => handleEventChoice(choice);
+                    choicesContainer.appendChild(btn);
+                });
+            } else {
+                applyEffect(event.effect);
+                setTimeout(() => {
+                    gameState.currentEvent = null;
+                    updateAllUI();
+                    renderHand();
+                    processNextEvent();
+                }, 1500);
+            }
+            updateAllUI();
+        }
+
+        function renderHandAndSlots() {
+            renderHand();
+            renderSlots();
+        }
+
+        function renderHand() {
+            const handArea = document.getElementById('handArea');
+            handArea.innerHTML = '';
+            gameState.hand.forEach(card => {
+                const cardEl = document.createElement('div');
+                cardEl.className = `card ${card.type}`;
+                cardEl.id = card.id;
+                const durabilityText = card.durability ? `耐:${card.durability}` : card.charges ? `次:${card.charges}` : '';
+                cardEl.innerHTML = `<div class="card-art">${card.art}</div><div class="card-name">${card.name}</div><div class="card-durability">${durabilityText}</div>`;
+                handArea.appendChild(cardEl);
+            });
+            
+            // 重新设置拖拽
+            setTimeout(setupDragAndDrop, 50);
+        }
+
+        function renderSlots() {
+            const slotsContainer = document.getElementById('verbSlots');
+            slotsContainer.innerHTML = '';
+            TIME_PERIODS.forEach((time, index) => {
+                const slotEl = document.createElement('div');
+                slotEl.id = `slot-${index}`;
+                let classList = 'verb-slot';
+                if (index === gameState.periodIndex && !gameState.currentEvent) classList += ' current';
+                if (gameState.slotCards[index]) classList += ' used';
+                slotEl.className = classList;
+                slotEl.innerHTML = `<span class="verb-slot-time">${time}</span>` + (gameState.slotCards[index] ? `<span class="verb-slot-action">${gameState.slotCards[index].name}</span>` : '');
+                slotsContainer.appendChild(slotEl);
+            });
+        }
+
+        function restartGame() {
+            // 清理拖拽状态
+            if (dragState.isDragging) {
+                resetDragState();
+            }
+            showScreen('startScreen');
+        }
+
+        // --- 初始化 ---
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置按钮事件监听
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('restartBtn').addEventListener('click', restartGame);
+            
+            // 显示开始屏幕
+            showScreen('startScreen');
+        });
+    </script>
+</body>
+</html>
